@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">ChargeMate</string>
+    <string name="power">Мощность зарядки:</string>
+</resources>

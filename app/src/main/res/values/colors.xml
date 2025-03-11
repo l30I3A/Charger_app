@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="progress_green">#5EDB5D</color>
+    <color name="progress_green_light">#77D977</color>
+    <color name="text_progress_green">#62A562</color>
+    <color name="progress_dark_green">#2A9E2A</color>
+    <color name="switch_dark_green">#36A236</color>
+    <color name="progress_gray">#DDDDDD</color>
+    <color name="background_gray">#131316</color>
+    <color name="text_gray">#BDBFCB</color>
+    <color name="text_gray2">#9B9FA3</color>
+    <color name="background_light_gray">#23252B</color>
+    <color name="thump_progress_blue">#37A8FF</color>
+    <color name="thump_progress_blue_2">#88C7FA</color>
+    <color name="stroke_thump_progress_blue">#D2FFF8</color>
+    <color name="progress_blue">#5266C6</color>
+    <color name="progress_blue_2">#3791FF</color>
+    <color name="text_progress_blue">#6887BD</color>
+    <color name="temperature_green">#5EDB5D</color>
+    <color name="temperature_dark_green">#358A35</color>
+    <color name="temperature_yellow">#DBD95D</color>
+    <color name="temperature_red">#DB5D5D</color>
+    <color name="colorPrimary">#131316</color>
+    <color name="colorPrimaryVariant">#131316</color>
+    <color name="colorOnPrimary">#FFFFFF</color>
+</resources>
