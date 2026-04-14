@@ -71,16 +71,21 @@ public class MqttHelper {
     }
 
     public void publish(String topic, String message) {
+        publish(topic, message, false); // По умолчанию не сохраняется
+    }
+
+    public void publish(String topic, String message, boolean retain) {
         Runnable publishTask = () -> client.publishWith()
                 .topic(topic)
                 .payload(message.getBytes(StandardCharsets.UTF_8))
                 .qos(MqttQos.EXACTLY_ONCE)
+                .retain(retain) // <--- Добавьте эту строку для флага retain
                 .send()
                 .whenComplete((publish, throwable) -> {
                     if (throwable != null) {
                         System.out.println("Ошибка публикации: " + throwable.getMessage());
                     } else {
-                        System.out.println("Сообщение опубликовано в топик: " + topic);
+                        System.out.println("Сообщение опубликовано в топик: " + topic + (retain ? " (сохранено)" : ""));
                     }
                 });
 

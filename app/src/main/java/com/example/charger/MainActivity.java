@@ -1,8 +1,8 @@
 package com.example.charger;
 
 import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -10,37 +10,38 @@ import android.graphics.Canvas;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
-import android.view.animation.Animation;
+import android.view.View;
 import android.view.animation.LinearInterpolator;
-import android.view.animation.RotateAnimation;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
-import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 
-import java.sql.SQLOutput;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity{
-    private float batteryLevel_1 = 0;
-    private float batteryLevel_2 = 0;
-    private float batteryLevel_3 = 0;
-    private float batteryLevel_4 = 0;
+public class MainActivity extends AppCompatActivity {
+    private float batteryLevel_1 = 34;
+    private float batteryLevel_2 = 23;
+    private float batteryLevel_3 = 12;
+    private float batteryLevel_4 = 54;
     private int current_power = 600;
-    private int current_temperature = 0;
+    private int current_temperature = 76;
     private int current_RPM = 0;
     private int currentColor;
     private float X = 281;
     private float Y = 281;
     private float current_X;
     private float current_Y;
+    private boolean switchStateVent;
+    private boolean switchState;
+    private float lastFanRotation = 0f;
     BatteryView batteryView_1;
     BatteryView batteryView_2;
     BatteryView batteryView_3;
@@ -55,7 +56,7 @@ public class MainActivity extends AppCompatActivity{
     TextView textViewPower2;
     TextView textViewPower3;
     TextView textViewRPM;
-    TextView textcolorlevel;
+TextView textcolorlevel;
     ImageView imageViewCharger1;
     ImageView imageViewCharger2;
     ImageView imageViewCharger3;
@@ -65,11 +66,14 @@ public class MainActivity extends AppCompatActivity{
     ColorCircleView colorCircleView;
     ColorViewer colorViewer;
     CustomSwitch customSwitch;
+    CustomSwitch customSwitchVent;
     ScrollView scrollView;
     ImageButton historyButton;
     ImageButton settingsButton;
     Settings settings;
     private AppUsageTracker usageTracker;
+
+    private ObjectAnimator fanRotationAnimator;
 
     @Override
     protected void onStart() {
@@ -78,17 +82,23 @@ public class MainActivity extends AppCompatActivity{
         scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP));
     }
 
-    @SuppressLint({"SetTextI18n", "DefaultLocale"})
+    @SuppressLint({"SetTextI18n", "DefaultLocale", "NewApi"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        EdgeToEdge.enable(this);
+
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
         setContentView(R.layout.activity_main);
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
+
+        View mainLayout = findViewById(R.id.main);
+        ViewCompat.setOnApplyWindowInsetsListener(mainLayout, (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+
+        getWindow().setStatusBarColor(getColor(R.color.background_gray));
 
         settings = new Settings();
         AppUsageTracker appUsageTracker = new AppUsageTracker(this);
@@ -101,41 +111,38 @@ public class MainActivity extends AppCompatActivity{
 
         updateHistory();
 
-        MqttManager.getInstance().publish("charger/charging/power", String.valueOf(current_power));
-        MqttManager.getInstance().publish("charger/color", String.format("#%06X", (0xFFFFFF & currentColor)));
         MqttManager.getInstance().subscribe("charger/power/1");
         MqttManager.getInstance().subscribe("charger/power/2");
         MqttManager.getInstance().subscribe("charger/power/3");
         MqttManager.getInstance().subscribe("charger/power/4");
         MqttManager.getInstance().subscribe("charger/temp");
         MqttManager.getInstance().setMqttListener((topic, message) -> {
-            Log.d("fjsifhishfwsfkl", "Получено сообщение: " + message + " из " + topic);
-                float value = Float.parseFloat(message); // Конвертируем сообщение в float
-                switch (topic) {
-                    case "charger/power/1":
-                        batteryLevel_1 = value;
-                        updateBatteryUI(1, batteryLevel_1);
-                        break;
-                    case "charger/power/2":
-                        batteryLevel_2 = value;
-                        updateBatteryUI(2, batteryLevel_2);
-                        break;
-                    case "charger/power/3":
-                        batteryLevel_3 = value;
-                        updateBatteryUI(3, batteryLevel_3);
-                        break;
-                    case "charger/power/4":
-                        batteryLevel_4 = value;
-                        updateBatteryUI(4, batteryLevel_4);
-                        break;
-                    case "charger/temp":
-                        current_temperature = (int) value;
-                        updateTemperatureUI(current_temperature);
-                        break;
-                }
+            Log.d("MQTT_Reseiver", "Получено сообщение: " + message + " из " + topic);
+            float value = Float.parseFloat(message); // Конвертируем сообщение в float
+            switch (topic) {
+                case "charger/power/1":
+                    batteryLevel_1 = value;
+                    updateBatteryUI(1, batteryLevel_1);
+                    break;
+                case "charger/power/2":
+                    batteryLevel_2 = value;
+                    updateBatteryUI(2, batteryLevel_2);
+                    break;
+                case "charger/power/3":
+                    batteryLevel_3 = value;
+                    updateBatteryUI(3, batteryLevel_3);
+                    break;
+                case "charger/power/4":
+                    batteryLevel_4 = value;
+                    updateBatteryUI(4, batteryLevel_4);
+                    break;
+                case "charger/temp":
+                    current_temperature = (int) value;
+                    updateTemperatureUI(current_temperature);
+                    break;
+            }
         });
 
-        getWindow().setStatusBarColor(getColor(R.color.background_gray));
         batteryView_1 = findViewById(R.id.batteryView_1);
         batteryView_1.setTemperatureLevel(batteryLevel_1);
         batteryView_1.startWaveAnimation();
@@ -179,7 +186,13 @@ public class MainActivity extends AppCompatActivity{
         currentColor = sharedPreferences.getInt("currentColor", 0xFFFFFFFF);
         current_X = sharedPreferences.getFloat("current_X", X);
         current_Y = sharedPreferences.getFloat("current_Y", Y);
-        boolean switchState = sharedPreferences.getBoolean("customSwitchState", false); // по умолчанию выключен
+        switchState = sharedPreferences.getBoolean("customSwitchState", false);
+        switchStateVent = sharedPreferences.getBoolean("customSwitchStateVent", false);
+        lastFanRotation = sharedPreferences.getFloat("lastFanRotation", 0f);
+
+        MqttManager.getInstance().publish("charger/color", String.format("#%06X", (0xFFFFFF & currentColor), true), true);
+        MqttManager.getInstance().publish("charger/cooler", switchStateVent ? "true" : "false", true);
+        MqttManager.getInstance().publish("charger/charging/power", String.valueOf(current_power), true);
 
         updateBatteryUI(1, batteryLevel_1);
         updateBatteryUI(2, batteryLevel_2);
@@ -187,7 +200,19 @@ public class MainActivity extends AppCompatActivity{
         updateBatteryUI(4, batteryLevel_4);
         updateTemperatureUI(current_temperature);
         colorCircleView.post(() -> colorCircleView.setSelectorPosition(current_X, current_Y));
-        scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP));
+
+        colorCircleView.setOnColorSelectedListener(color -> {
+            colorViewer.SetViewingColor(color);
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putInt("currentColor", currentColor);
+            editor.putFloat("current_X", colorCircleView.get_my_X());
+            editor.putFloat("current_Y", colorCircleView.get_my_Y());
+            editor.apply();
+            if (currentColor != color && switchState){
+                currentColor = color;
+                MqttManager.getInstance().publish("charger/color", String.format("#%06X", (0xFFFFFF & currentColor)), true);
+            }
+        });
 
         customSwitch = findViewById(R.id.customSwitch);
         customSwitch.setChecked(switchState);
@@ -196,21 +221,15 @@ public class MainActivity extends AppCompatActivity{
             textcolorlevel.setAlpha(1);
             colorCircleView.setAlpha(1);
             colorViewer.setAlpha(1);
-            colorCircleView.setOnColorSelectedListener(color -> {
-                colorViewer.SetViewingColor(color);
-                currentColor = color;
-                MqttManager.getInstance().publish("charger/color", String.format("#%06X", (0xFFFFFF & currentColor)));
-            });
-            MqttManager.getInstance().publish("charger/color", String.format("#%06X", (0xFFFFFF & colorCircleView.getColorAtPoint())));
         } else {
             colorCircleView.setEnabled(false);
             textcolorlevel.setAlpha(0.3f);
             colorCircleView.setAlpha(0.3f);
             colorViewer.setAlpha(0.3f);
             currentColor = 0x000000;
-            MqttManager.getInstance().publish("charger/color", String.format("#%06X", (0)));
         }
         customSwitch.setOnCheckedChangeListener(isChecked -> {
+            switchState = isChecked;
             SharedPreferences.Editor editor = sharedPreferences.edit();
             editor.putBoolean("customSwitchState", isChecked);
             editor.apply();
@@ -220,24 +239,48 @@ public class MainActivity extends AppCompatActivity{
                 textcolorlevel.setAlpha(1);
                 colorCircleView.setAlpha(1);
                 colorViewer.setAlpha(1);
-                colorCircleView.setOnColorSelectedListener(color -> {
-                    colorViewer.SetViewingColor(color);
-                    currentColor = color;
-                    MqttManager.getInstance().publish("charger/color", String.format("#%06X", (0xFFFFFF & currentColor)));
-                });
-                MqttManager.getInstance().publish("charger/color", String.format("#%06X", (0xFFFFFF & colorCircleView.getColorAtPoint())));
+                currentColor = colorCircleView.getColorAtPoint();
+                MqttManager.getInstance().publish("charger/color", String.format("#%06X", (0xFFFFFF & currentColor)), true);
             } else {
                 colorCircleView.setEnabled(false);
                 textcolorlevel.setAlpha(0.3f);
                 colorCircleView.setAlpha(0.3f);
                 colorViewer.setAlpha(0.3f);
                 currentColor = 0x000000;
-                MqttManager.getInstance().publish("charger/color", String.format("#%06X", (0)));
+                MqttManager.getInstance().publish("charger/color", String.format("#%06X", (0)), true);
+            }
+            editor.putInt("currentColor", currentColor);
+            editor.putFloat("current_X", colorCircleView.get_my_X());
+            editor.putFloat("current_Y", colorCircleView.get_my_Y());
+            editor.apply();
+        });
+
+        customSwitchVent = findViewById(R.id.customSwitchVent);
+
+        customSwitchVent.setChecked(switchStateVent);
+        if (switchStateVent) {
+            updateTemperatureUI(current_temperature);
+        } else {
+            current_RPM = 0;
+            rotateImage();
+        }
+
+        customSwitchVent.setOnCheckedChangeListener(isChecked -> {
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putBoolean("customSwitchStateVent", isChecked);
+            editor.apply();
+            switchStateVent = isChecked;
+            MqttManager.getInstance().publish("charger/cooler", switchStateVent ? "true" : "false", true);
+            if (switchStateVent) {
+                updateTemperatureUI(current_temperature);
+            } else {
+                current_RPM = 0;
+                rotateImage();
             }
         });
 
         seekBar = findViewById(R.id.powerSeekBar);
-        switch (current_power){
+        switch (current_power) {
             case 300: {
                 seekBar.setProgress(0);
                 textViewPower2.setTextColor(getColor(R.color.text_gray2));
@@ -290,7 +333,7 @@ public class MainActivity extends AppCompatActivity{
                     targetProgress = 100;
                     current_power = 900;
                 }
-                MqttManager.getInstance().publish("charger/charging/power", String.valueOf(current_power));
+                MqttManager.getInstance().publish("charger/charging/power", String.valueOf(current_power), true);
 
                 int distance = Math.abs(progress - targetProgress);
                 long duration = Math.max(100, (long) (1000 * (distance / 100.0)));
@@ -307,10 +350,12 @@ public class MainActivity extends AppCompatActivity{
             overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
         });
         settingsButton = findViewById(R.id.settingsButton);
-        settingsButton.setOnClickListener(v -> {
-            settings.show(getSupportFragmentManager(), "settingsFragment");
-        });
-        rotateImage();
+        settingsButton.setOnClickListener(v -> settings.show(getSupportFragmentManager(), "settingsFragment"));
+        scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP));
+
+        if (imageViewFan != null) {
+            imageViewFan.setRotation(lastFanRotation);
+        }
     }
 
     @SuppressLint("DefaultLocale")
@@ -365,40 +410,49 @@ public class MainActivity extends AppCompatActivity{
 
     private void updateTemperatureUI(int temperatureLevel) {
         int finalTemp = Math.max(30, Math.min(temperatureLevel, 80));
-        int finalTempRPM = Math.max(30, Math.min(temperatureLevel, 100));
+        int finalTempRPM = Math.max(40, Math.min(temperatureLevel, 100));
         temperatureview.setTemperatureLevel(finalTemp);
         temperatureview.post(() -> {
             int X = temperatureview.getWidth() / 2;
             int Y = (int) ((temperatureview.getHeight() - temperatureview.returnBoarder() * 2) * (1 - (float) finalTemp / 80) + 20);
             int pixelColor = getPixelColorFromView(temperatureview, X, Y);
             textViewTemperature.setTextColor(pixelColor);
-            if (current_temperature != 100 && current_temperature >=30)
+            if (current_temperature < 100 && current_temperature >= 30)
                 textViewTemperature.setText(String.format("%d℃", current_temperature));
             else if (current_temperature < 30)
-                textViewTemperature.setText(String.format('<'+"%d℃", 30));
+                textViewTemperature.setText(String.format('<' + "%d℃", 30));
             else
-                textViewTemperature.setText(String.format('>'+"%d℃", 99));
-            int buffer = current_RPM;
-            current_RPM = 1500 + (finalTempRPM-50)*(6000-1500)/(100-50);
-            if (current_RPM != buffer) rotateImage();
+                textViewTemperature.setText(String.format('>' + "%d℃", 99));
+            if (switchStateVent && finalTempRPM > 40) {
+                current_RPM = map(finalTempRPM, 50, 100, 1500, 6000);
+            } else {
+                current_RPM = 0;
+            }
+            rotateImage();
         });
     }
 
     private void rotateImage() {
-        RotateAnimation rotateAnimation = new RotateAnimation(
-                360, 0,
-                Animation.RELATIVE_TO_SELF, 0.5f,
-                Animation.RELATIVE_TO_SELF, 0.5f
-        );
-        rotateAnimation.setRepeatCount(Animation.INFINITE); // бесконечное повторение
-        imageViewFan.startAnimation(rotateAnimation);
-        rotateAnimation.setInterpolator(new LinearInterpolator());
-        if(current_RPM>=1500){
+        if (current_RPM > 0) {
+            float currentRotation = imageViewFan.getRotation();
+            if (fanRotationAnimator != null) {
+                fanRotationAnimator.cancel();
+            }
+            fanRotationAnimator = ObjectAnimator.ofFloat(imageViewFan, "rotation", currentRotation, currentRotation + 360f);
+            fanRotationAnimator.setInterpolator(new LinearInterpolator());
+            fanRotationAnimator.setRepeatCount(ValueAnimator.INFINITE);
             int rotate_current_RPM = Math.min(current_RPM, 6000);
-            rotateAnimation.setDuration(3500000 / rotate_current_RPM);
+            fanRotationAnimator.setDuration(3600000L / rotate_current_RPM);
             textViewRPM.setText(rotate_current_RPM + "RPM");
+
+            fanRotationAnimator.start();
+
+        } else {
+            if (fanRotationAnimator != null && fanRotationAnimator.isStarted()) {
+                fanRotationAnimator.cancel();
+            }
+            textViewRPM.setText("0RPM");
         }
-        else textViewRPM.setText("0RPM");
     }
 
     private int getPixelColorFromView(TemperatureView view, int x, int y) {
@@ -423,6 +477,7 @@ public class MainActivity extends AppCompatActivity{
         editor.putInt("currentColor", currentColor);
         editor.putFloat("current_X", colorCircleView.get_my_X());
         editor.putFloat("current_Y", colorCircleView.get_my_Y());
+        editor.putFloat("lastFanRotation", imageViewFan.getRotation());
         editor.apply();
     }
 
@@ -446,7 +501,12 @@ public class MainActivity extends AppCompatActivity{
         finishAffinity();
         System.exit(0);
     }
+
     private void updateHistory() {
         List<String[]> history = usageTracker.getHistoryList();
+    }
+
+    private int map(int x, int in_min, int in_max, int out_min, int out_max) {
+        return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
     }
 }
